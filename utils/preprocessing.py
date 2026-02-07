@@ -1,27 +1,22 @@
 import cv2
 import os
 
-def create_edge_dataset(input_folder, output_folder):
-    os.makedirs(output_folder, exist_ok=True)
+input_folder = "data"
+edge_folder = "edges"
 
-    for file in os.listdir(input_folder):
-        if file.lower().endswith(('.jpg', '.png', '.jpeg')):
-            path = os.path.join(input_folder, file)
-            img = cv2.imread(path)
+os.makedirs(edge_folder, exist_ok=True)
 
-            # Resize
-            img = cv2.resize(img, (512, 512))
+for file in os.listdir(input_folder):
+    path = os.path.join(input_folder, file)
+    img = cv2.imread(path)
 
-            # Convert to grayscale
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    if img is None:
+        print(f"❌ Cannot read {file}")
+        continue
 
-            # Remove noise
-            blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 80, 150)
 
-            # Edge detection
-            edges = cv2.Canny(blur, 50, 150)
+    cv2.imwrite(os.path.join(edge_folder, file), edges)
 
-            cv2.imwrite(os.path.join(output_folder, file), edges)
-
-if __name__ == "__main__":
-    create_edge_dataset("data/photos", "data/edges")
+print("✅ Edges created!")
