@@ -23,38 +23,36 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # =========================
 # DATASET
 # =========================
-class CADDataset(Dataset):
+class JewelryDataset(Dataset):
     def __init__(self, edge_dir, cad_dir):
         self.edge_dir = edge_dir
         self.cad_dir = cad_dir
-        self.files = os.listdir(edge_dir)
+
+        # Only keep files that exist in BOTH folders
+        edge_files = set(os.listdir(edge_dir))
+        cad_files  = set(os.listdir(cad_dir))
+
+        self.files = sorted(list(edge_files & cad_files))  # intersection
+
+        print(f"Found {len(self.files)} matching image pairs")
 
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, idx):
-        name = self.files[idx]
+        file = self.files[idx]
 
-        edge_path = os.path.join(self.edge_dir, name)
-        cad_path = os.path.join(self.cad_dir, name)
+        edge_path = os.path.join(self.edge_dir, file)
+        cad_path  = os.path.join(self.cad_dir, file)
 
         edge = cv2.imread(edge_path, cv2.IMREAD_GRAYSCALE)
-        cad = cv2.imread(cad_path, cv2.IMREAD_GRAYSCALE)
+        cad  = cv2.imread(cad_path,  cv2.IMREAD_GRAYSCALE)
 
-        # Skip broken images
-        if edge is None or cad is None:
-            edge = np.zeros((IMG_SIZE, IMG_SIZE), dtype=np.uint8)
-            cad = np.zeros((IMG_SIZE, IMG_SIZE), dtype=np.uint8)
+        edge = cv2.resize(edge, (512, 512))
+        cad  = cv2.resize(cad,  (512, 512))
 
-        # 🔥 FIX: resize to SAME SIZE as model output
-        edge = cv2.resize(edge, (IMG_SIZE, IMG_SIZE))
-        cad = cv2.resize(cad, (IMG_SIZE, IMG_SIZE))
-
-        edge = edge / 255.0
-        cad = cad / 255.0
-
-        edge = torch.tensor(edge, dtype=torch.float32).unsqueeze(0)
-        cad = torch.tensor(cad, dtype=torch.float32).unsqueeze(0)
+        edge = torch.tensor(edge/255.0).unsqueeze(0).float()
+        cad  = torch.tensor(cad/255.0).unsqueeze(0).float()
 
         return edge, cad
 
@@ -62,7 +60,8 @@ class CADDataset(Dataset):
 # =========================
 # LOAD DATA
 # =========================
-dataset = CADDataset(EDGE_DIR, CAD_DIR)
+dataset = JewelryDataset(EDGE_DIR, CAD_DIR)
+
 loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
 
 # =========================

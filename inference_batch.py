@@ -17,7 +17,9 @@ for file in os.listdir("edges"):
     with torch.no_grad():
         pred = model(img)
 
-    mask = pred.squeeze().numpy() * 255
+    mask = pred.squeeze().cpu().numpy()
+    mask = (mask * 255).astype("uint8")  # convert to 8-bit
     cv2.imwrite(f"outputs/{file}", mask)
+
 
 print("✅ Batch inference done!")

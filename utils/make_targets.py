@@ -2,27 +2,35 @@ import cv2
 import os
 import numpy as np
 
-input_folder = "data"
-target_folder = "cad_targets"
+input_dir = "Photos"       # ORIGINAL JEWELRY PHOTOS
+output_dir = "cad_targets" # TARGET MASKS
 
-os.makedirs(target_folder, exist_ok=True)
+os.makedirs(output_dir, exist_ok=True)
 
-for file in os.listdir(input_folder):
-    path = os.path.join(input_folder, file)
+files = [f for f in os.listdir(input_dir) if f.lower().endswith(('.jpg','.jpeg','.png'))]
+
+print("Found", len(files), "photos")
+
+for file in files:
+    path = os.path.join(input_dir, file)
     img = cv2.imread(path)
 
     if img is None:
-        print(f"❌ Cannot read {file}")
+        print("❌ Skipping:", file)
         continue
 
+    img = cv2.resize(img, (512,512))
+
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 50, 150)
+    blur = cv2.GaussianBlur(gray, (5,5), 0)
 
-    # Correct replacement for cv2.zeros_like
-    mask = np.zeros_like(edges)
+    # Binary mask
+    _, mask = cv2.threshold(blur, 120, 255, cv2.THRESH_BINARY)
 
-    mask[edges > 0] = 255
+    # Clean noise
+    kernel = np.ones((5,5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
-    cv2.imwrite(os.path.join(target_folder, file), mask)
+    cv2.imwrite(os.path.join(output_dir, file), mask)
 
-print("✅ CAD targets created!")
+print("✅ CAD masks created!")
