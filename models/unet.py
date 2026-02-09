@@ -1,45 +1,50 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class UNet(nn.Module):
     def __init__(self):
-        super().__init__()
+        super(UNet, self).__init__()
 
-        self.enc1 = self.block(1, 64)
-        self.pool1 = nn.MaxPool2d(2)
-        self.enc2 = self.block(64, 128)
-        self.pool2 = nn.MaxPool2d(2)
+        def block(in_c, out_c):
+            return nn.Sequential(
+                nn.Conv2d(in_c, out_c, 3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(out_c, out_c, 3, padding=1),
+                nn.ReLU(),
+            )
 
-        self.bottleneck = self.block(128, 256)
+        # DOWN
+        self.d1 = block(1, 64)
+        self.d2 = block(64, 128)
+        self.d3 = block(128, 256)
+        self.d4 = block(256, 512)
 
-        self.up2 = nn.ConvTranspose2d(256, 128, 2, 2)
-        self.dec2 = self.block(256, 128)
+        # UP (NO ConvTranspose — matches your trained model)
+        self.u1 = block(512 + 256, 256)
+        self.u2 = block(256 + 128, 128)
+        self.u3 = block(128 + 64, 64)
 
-        self.up1 = nn.ConvTranspose2d(128, 64, 2, 2)
-        self.dec1 = self.block(128, 64)
-
-        self.out = nn.Conv2d(64, 1, 1)
-
-    def block(self, in_c, out_c):
-        return nn.Sequential(
-            nn.Conv2d(in_c, out_c, 3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(out_c, out_c, 3, padding=1),
-            nn.ReLU()
-        )
+        self.pool = nn.MaxPool2d(2)
+        self.final = nn.Conv2d(64, 1, 1)
 
     def forward(self, x):
-        e1 = self.enc1(x)
-        e2 = self.enc2(self.pool1(e1))
+        d1 = self.d1(x)
+        d2 = self.d2(self.pool(d1))
+        d3 = self.d3(self.pool(d2))
+        d4 = self.d4(self.pool(d3))
 
-        b = self.bottleneck(self.pool2(e2))
+        # 🔼 Upsample with interpolation (not transpose conv)
+        u1 = F.interpolate(d4, scale_factor=2, mode='bilinear', align_corners=False)
+        u1 = torch.cat([u1, d3], dim=1)
+        u1 = self.u1(u1)
 
-        d2 = self.up2(b)
-        d2 = torch.cat([d2, e2], dim=1)
-        d2 = self.dec2(d2)
+        u2 = F.interpolate(u1, scale_factor=2, mode='bilinear', align_corners=False)
+        u2 = torch.cat([u2, d2], dim=1)
+        u2 = self.u2(u2)
 
-        d1 = self.up1(d2)
-        d1 = torch.cat([d1, e1], dim=1)
-        d1 = self.dec1(d1)
+        u3 = F.interpolate(u2, scale_factor=2, mode='bilinear', align_corners=False)
+        u3 = torch.cat([u3, d1], dim=1)
+        u3 = self.u3(u3)
 
-        return torch.sigmoid(self.out(d1))
+        return torch.sigmoid(self.final(u3))
